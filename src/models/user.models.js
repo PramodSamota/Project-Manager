@@ -94,7 +94,6 @@ userSchema.methods.generateRefreshToken = function () {
   );
 };
 
-
 userSchema.methods.generateTemporaryToken = function () {
   // This token should be client facing
   // for example: for email verification unHashedToken should go into the user's mail
