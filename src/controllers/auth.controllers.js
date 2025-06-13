@@ -313,20 +313,21 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
   console.log(refreshToken);
 
   if (!refreshToken) {
-    throw new ApiError("refresh Token does not provided", 400);
+    throw new ApiError(400, "refresh Token does not provided");
   }
+
   let decodeToken;
   try {
     decodeToken = jwt.verify(refreshToken, env.REFRESH_TOKEN_SECRET);
     console.log(decodeToken);
   } catch (error) {
-    throw new ApiError("refreshtToken is wronge", error);
+    throw new ApiError(400, "refreshtToken is wronge", error);
   }
 
   const user = await User.findById(decodeToken._id);
 
   if (!user) {
-    throw new ApiError("user is not getting", 400);
+    throw new ApiError(400, "user is not getting");
   }
   const accessToken = user.generateAccessToken();
 
@@ -346,7 +347,7 @@ const getCurrentUser = asyncHandler(async (req, res) => {
   const user = req.user;
 
   if (!user) {
-    throw new ApiError("user is not gettin", 400);
+    throw new ApiError(400, "user is not gettin");
   }
   res.status(200).json(new ApiResponse(200, user, "user is presenetHere"));
 });

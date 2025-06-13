@@ -304,7 +304,7 @@ const deleteProject = asyncHandler(async (req, res) => {
       session: clientSession,
     });
     await ProjectMember.deleteMany(
-      { project: pid },
+      { project: new mongoose.Types.ObjectId(pid) },
       {
         session: clientSession,
       },
@@ -325,7 +325,6 @@ const deleteProject = asyncHandler(async (req, res) => {
     );
 });
 
-
 const getProjectMembers = asyncHandler(async (req, res) => {
   const { pid } = req.params;
 
@@ -335,7 +334,7 @@ const getProjectMembers = asyncHandler(async (req, res) => {
 
   const projectMembers = await ProjectMember.aggregate([
     {
-      $match: { project: mongoose.Types.ObjectId.createFromHexString(pid) },
+      $match: { project: new mongoose.Types.ObjectId(pid) },
     },
     {
       $lookup: {
