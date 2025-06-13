@@ -1,65 +1,76 @@
 import { asyncHandler } from "../utils/async-handler.js";
-import {User} from "../models/user.models.js"
-import {validateChangePassword, validateEmailData, validateLoginData,validateRegisterData, validateResetPassword} from "../validators/auth.js"
+import { User } from "../models/user.models.js";
+import {
+  validateChangePassword,
+  validateEmailData,
+  validateLoginData,
+  validateRegisterData,
+  validateResetPassword,
+} from "../validators/auth.js";
 import { ApiError } from "../utils/api-error.js";
-import {env} from "../validators/env.js"
-import {sendEmail,
-       emailVerificationMailgenContent,
-       forgotPasswordMailgenContent
+import { env } from "../validators/env.js";
+import {
+  sendEmail,
+  emailVerificationMailgenContent,
+  forgotPasswordMailgenContent,
 } from "../utils/mail.js";
 import { ApiResponse } from "../utils/api-response.js";
 
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
+import mongoose from "mongoose";
 
 const registerUser = asyncHandler(async (req, res) => {
-
-  
   const { email, username, password } = validateRegisterData(req.body).data;
-    
-  
-  const existingUser =  await User.findOne({email});
-    
-  if(existingUser){
-     throw new ApiError("User is already exist",400);
-       }
+
+  const existingUser = await User.findOne({ email });
+
+  if (existingUser) {
+    throw new ApiError("User is already exist", 400);
+  }
 
   const user = await User.create({
     email,
     username,
     password,
-  })
+  });
 
-   if(!user){
-     throw new ApiError("user is not create", error);
-   }
+  if (!user) {
+    throw new ApiError("user is not create", 400);
+  }
 
-   const {hashedToken,unHashedToken,tokenExpiry} = user.generateTemporaryToken();
+  const { hashedToken, unHashedToken, tokenExpiry } =
+    user.generateTemporaryToken();
 
-     user.emailVerificationToken= hashedToken;
-     user.emailVerificationExpiry=tokenExpiry;
+  user.emailVerificationToken = hashedToken;
+  user.emailVerificationExpiry = tokenExpiry;
 
-     // avater fix;
-     //upload on the cloudaniry
-     await user.save();
+  // avater fix;
+  //upload on the cloudaniry
+  await user.save();
 
-    const verificationUrl = `${env.BASE_URI}/api/v1/user/verify/email/${unHashedToken}`;
-      
-    sendEmail(
-      user.email,
-      "verify email",
-      emailVerificationMailgenContent(user.username, verificationUrl) )
-    
-    res.
-        status(201)
-        .json(new ApiResponse(201,user,"user is Succefully register: please verify your email"))
+  const verificationUrl = `${env.BASE_URI}/api/v1/user/verify/email/${unHashedToken}`;
 
+  sendEmail(
+    user.email,
+    "verify email",
+    emailVerificationMailgenContent(user.username, verificationUrl),
+  );
+
+  res
+    .status(201)
+    .json(
+      new ApiResponse(
+        201,
+        user,
+        "user is Succefully register: please verify your email",
+      ),
+    );
 });
-
 
 const logoutUser = asyncHandler(async (req, res) => {
   const userId = req?.user?._id;
-   console.log(req.user);
+  console.log(req.user);
   if (!userId) {
     throw new ApiError("Authentication failed", 400);
   }
@@ -79,271 +90,266 @@ const logoutUser = asyncHandler(async (req, res) => {
 
   res.clearCookie("refreshToken");
 
-  res.status(200).json(new ApiResponse(200, null, "User is successfully logged out"));
+  res
+    .status(200)
+    .json(new ApiResponse(200, null, "User is successfully logged out"));
 });
 
 const verifyEmail = asyncHandler(async (req, res) => {
+  console.log(req.params);
+  const unHashedToken = req.params.unHashedToken;
+  console.log("unHashedToken", unHashedToken);
 
-   console.log(req.params);
-  const unHashedToken= req.params.unHashedToken;
-  console.log("unHashedToken",unHashedToken);
-
-  if(!unHashedToken){
-    throw new ApiError("token is not geting from URL",400);
+  if (!unHashedToken) {
+    throw new ApiError("token is not geting from URL", 400);
   }
 
   const hashedToken = crypto
-                      .createHash("sha256")
-                      .update(unHashedToken)
-                      .digest("hex");
+    .createHash("sha256")
+    .update(unHashedToken)
+    .digest("hex");
 
-          console.log(typeof hashedToken);
+  console.log(typeof hashedToken);
 
   const user = await User.findOne({
-          emailVerificationToken:hashedToken,
-          emailVerificationExpiry:{$gt: new Date()}                     
-  })
+    emailVerificationToken: new mongoose.Types.ObjectId(hashedToken),
+    emailVerificationExpiry: { $gt: new Date() },
+  });
 
-       console.log(user);
+  console.log(user);
 
-  if(!user){
-    throw new ApiError("email is not verified",400);
+  if (!user) {
+    throw new ApiError("email is not verified", 400);
   }
-     user.emailVerificationToken=undefined;
-     user.emailVerificationExpiry=undefined;
-     user.isEmailVerified=true;
+  user.emailVerificationToken = undefined;
+  user.emailVerificationExpiry = undefined;
+  user.isEmailVerified = true;
 
-     await user.save();
+  await user.save();
 
-     res.status(200).json(new ApiResponse(200,user, "email is verified please Login"))
+  res
+    .status(200)
+    .json(new ApiResponse(200, user, "email is verified please Login"));
 });
 
-
 const loginUser = asyncHandler(async (req, res) => {
-    
   const { email, password } = validateLoginData(req.body).data;
 
-  const user = await User.findOne({email});
+  const user = await User.findOne({ email });
 
-  if(!user){
-    throw new ApiError("Crendtials are wronge ",400);
+  if (!user) {
+    throw new ApiError("Crendtials are wronge ", 400);
   }
 
-  if(!user.isEmailVerified){
-    throw new ApiError("email is not verify ",400);
+  if (!user.isEmailVerified) {
+    throw new ApiError("email is not verify ", 400);
   }
 
   const verifyPassword = user.isPasswordCorrect(password);
 
-  if(!verifyPassword){
-    throw new ApiError("Crendtials are wronge ",400);
+  if (!verifyPassword) {
+    throw new ApiError("Crendtials are wronge ", 400);
   }
-  
 
   const accessToken = user.generateAccessToken();
   const refreshToken = user.generateRefreshToken();
-  
-  user.refreshToken=refreshToken;
 
+  user.refreshToken = refreshToken;
 
   await user.save();
 
   const cookieOption = {
-      httpOnly: true,
-      secure: true,
-      maxAge: 24 * 60 * 60 * 1000,
-    };
+    httpOnly: true,
+    secure: true,
+    maxAge: 24 * 60 * 60 * 1000,
+  };
 
-  res.cookie("accessToken",accessToken,cookieOption)
-   res.cookie("refreshToken",refreshToken,cookieOption)
-    res.status(200).json(new ApiResponse(200,user,"user is succesfully login"));
-   
+  res.cookie("accessToken", accessToken, cookieOption);
+  res.cookie("refreshToken", refreshToken, cookieOption);
+  res.status(200).json(new ApiResponse(200, user, "user is succesfully login"));
 });
 
 const resendEmailVerification = asyncHandler(async (req, res) => {
- 
   // console.log(req.body);
-    const {email} = validateEmailData(req.body).data;
+  const { email } = validateEmailData(req.body).data;
 
-    if(!email){
-      throw new ApiError("please provide correct email",400);
-    }
-     
-    const user = await User.findOne({email});
+  if (!email) {
+    throw new ApiError("please provide correct email", 400);
+  }
 
-    // i am avoiding this command right now bcz i want to continue;
-    // if(user.isEmailVerified){
+  const user = await User.findOne({ email });
 
-    // }
+  // i am avoiding this command right now bcz i want to continue;
+  // if(user.isEmailVerified){
 
-    if(!user){
-      throw new ApiError("No user found for this email",400);
-    }
-    
-    const {hashedToken,unHashedToken,tokenExpiry} = user.generateTemporaryToken();
+  // }
 
-       user.emailVerificationToken=hashedToken;
-       user.emailVerificationExpiry=tokenExpiry;
+  if (!user) {
+    throw new ApiError("No user found for this email", 400);
+  }
 
-   const verificationUrl = `${env.BASE_URI}/api/v1/user/verify/email/${unHashedToken}`;
-      
-    sendEmail(
-      user.email,
-      "verify email",
-      emailVerificationMailgenContent(user.username, verificationUrl) )
-    
+  const { hashedToken, unHashedToken, tokenExpiry } =
+    user.generateTemporaryToken();
 
-    res.status(200).json(new ApiResponse(200,user,"Reset eamil-veriry mail send"))
-  
+  user.emailVerificationToken = hashedToken;
+  user.emailVerificationExpiry = tokenExpiry;
+
+  const verificationUrl = `${env.BASE_URI}/api/v1/user/verify/email/${unHashedToken}`;
+
+  sendEmail(
+    user.email,
+    "verify email",
+    emailVerificationMailgenContent(user.username, verificationUrl),
+  );
+
+  res
+    .status(200)
+    .json(new ApiResponse(200, user, "Reset eamil-veriry mail send"));
 });
 
 const resetForgottenPassword = asyncHandler(async (req, res) => {
+  const { email } = validateEmailData(req.body).data;
 
-     const {email} = validateEmailData(req.body).data;
+  if (!email) {
+    throw new ApiError("please provide correct email", 400);
+  }
 
-    if(!email){
-      throw new ApiError("please provide correct email",400);
-    }
-     
-    const user = await User.findOne({email});
+  const user = await User.findOne({ email });
 
-    if(!user){
-      throw new ApiError("No user found for this email",400);
-    }
-    
-    const {hashedToken,unHashedToken,tokenExpiry} = user.generateTemporaryToken();
+  if (!user) {
+    throw new ApiError("No user found for this email", 400);
+  }
 
-       user.forgotPasswordToken=hashedToken;
-       user.forgotPasswordExpiry=tokenExpiry;
+  const { hashedToken, unHashedToken, tokenExpiry } =
+    user.generateTemporaryToken();
 
-    const forgotPasswordURL = `${env.BASE_URI}/api/user/forgot-password/${unHashedToken}`
+  user.forgotPasswordToken = hashedToken;
+  user.forgotPasswordExpiry = tokenExpiry;
 
-    sendEmail(
-        user.email,
-        "fogot Password",
-        forgotPasswordMailgenContent(user.username,forgotPasswordURL)
-    );
+  const forgotPasswordURL = `${env.BASE_URI}/api/user/forgot-password/${unHashedToken}`;
 
-    res.status(200).json(new ApiResponse(200,user,"forgot password mail send"))
-  
+  sendEmail(
+    user.email,
+    "fogot Password",
+    forgotPasswordMailgenContent(user.username, forgotPasswordURL),
+  );
 
+  res.status(200).json(new ApiResponse(200, user, "forgot password mail send"));
 });
-
 
 //this not working
 const forgotPasswordRequest = asyncHandler(async (req, res) => {
+  const { unHashedToken } = req.params;
 
-     const {unHashedToken} = req.params;
-    
-    const {password,confirmPassword} = validateResetPassword(req.body).data;
-    
-     if(password!==confirmPassword){
-    throw new ApiError("write the same Password",400);
+  const { password, confirmPassword } = validateResetPassword(req.body).data;
+
+  if (password !== confirmPassword) {
+    throw new ApiError("write the same Password", 400);
   }
 
-    if(!unHashedToken){
-    throw new ApiError("token is not geting from URL",400);
+  if (!unHashedToken) {
+    throw new ApiError("token is not geting from URL", 400);
   }
-   const hashedToken = crypto.createHash("sha256").update(unHashedToken).digest("hex");
-    console.log(hashedToken);
+  const hashedToken = crypto
+    .createHash("sha256")
+    .update(unHashedToken)
+    .digest("hex");
+  console.log(hashedToken);
 
   const user = await User.findOne({
-          forgotPasswordToken: hashedToken, 
-          forgotPasswordExpiry:{$gt: new Date()}                   
-  })
-         console.log(user);
+    forgotPasswordToken: new mongoose.Types.ObjectId(hashedToken),
+    forgotPasswordExpiry: { $gt: new Date() },
+  });
+  console.log(user);
 
-  if(!user){
-    throw new ApiError("user is not get via hashedToken",400);
+  if (!user) {
+    throw new ApiError("user is not get via hashedToken", 400);
   }
 
-     user.forgotPasswordToken=undefined;
-     user.forgotPasswordExpiry=undefined;
-     
-         user.password = password;
-     
-     
-     await user.save();
+  user.forgotPasswordToken = undefined;
+  user.forgotPasswordExpiry = undefined;
 
-     res.status(200).json(new ApiResponse(200,user, "password is change succesfull"))
-  
-  });
+  user.password = password;
 
+  await user.save();
+
+  res
+    .status(200)
+    .json(new ApiResponse(200, user, "password is change succesfull"));
+});
 
 const changeCurrentPassword = asyncHandler(async (req, res) => {
-  
-  const {oldPassword,newPassword} = validateChangePassword(req.body).data;
+  const { oldPassword, newPassword } = validateChangePassword(req.body).data;
 
   const userId = req.user._id;
 
-  if(!userId){
-    throw new ApiError("did not get userId ",400);
+  if (!userId) {
+    throw new ApiError("did not get userId ", 400);
   }
 
-  const user = await User.findOne({_id:userId});
+  const user = await User.findOne({ _id: userId });
 
-  if(!userId){
-    throw new ApiError("user is not get",400);
+  if (!userId) {
+    throw new ApiError("user is not get", 400);
   }
 
   const isPasswordMatch = user.isPasswordCorrect(oldPassword);
 
-   if(!isPasswordMatch){
-    throw new ApiError("your Old password is wronge",400);
+  if (!isPasswordMatch) {
+    throw new ApiError("your Old password is wronge", 400);
   }
 
-   user.password = newPassword;
+  user.password = newPassword;
 
-   await user.save();
+  await user.save();
 
-   res.status(200).json(new ApiResponse(200,user,"newPassword is set"));
+  res.status(200).json(new ApiResponse(200, user, "newPassword is set"));
 });
 
 //take look on refreshToken
 const refreshAccessToken = asyncHandler(async (req, res) => {
-  
-      console.log(req.cookies);
-      const refreshToken = req.cookies.refreshToken;
-      console.log(refreshToken);
+  console.log(req.cookies);
+  const refreshToken = req.cookies.refreshToken;
+  console.log(refreshToken);
 
-      if(!refreshToken){
-        throw new ApiError("refresh Token does not provided",400);
-      }
-          let  decodeToken;
-    try {
-       decodeToken = jwt.verify(refreshToken,env.REFRESH_TOKEN_SECRET);
-        console.log(decodeToken);
+  if (!refreshToken) {
+    throw new ApiError(400, "refresh Token does not provided");
+  }
 
-    } catch (error) {
-        throw new ApiError("refreshtToken is wronge",400);
-    }
+  let decodeToken;
+  try {
+    decodeToken = jwt.verify(refreshToken, env.REFRESH_TOKEN_SECRET);
+    console.log(decodeToken);
+  } catch (error) {
+    throw new ApiError(400, "refreshtToken is wronge", error);
+  }
 
-      const user = await User.findById(decodeToken._id);
+  const user = await User.findById(decodeToken._id);
 
-    if(!user){
-      throw new ApiError("user is not getting",400);
-    }
-      const accessToken = user.generateAccessToken();
+  if (!user) {
+    throw new ApiError(400, "user is not getting");
+  }
+  const accessToken = user.generateAccessToken();
 
-      const cookieOption = {
-        httpOnly: true,
-        secure: true,
-        maxAge: 24 * 60 * 60 * 1000,
-      }; 
+  const cookieOption = {
+    httpOnly: true,
+    secure: true,
+    maxAge: 24 * 60 * 60 * 1000,
+  };
 
-      res.cookie("accessToken",accessToken,cookieOption);
-      res.status(200).json(new ApiResponse(200,accessToken,"accessToken is refreshed"));
-      
+  res.cookie("accessToken", accessToken, cookieOption);
+  res
+    .status(200)
+    .json(new ApiResponse(200, accessToken, "accessToken is refreshed"));
 });
 
 const getCurrentUser = asyncHandler(async (req, res) => {
-     
   const user = req.user;
-   
-  if(!user){
-    throw new ApiError("user is not gettin",400);
+
+  if (!user) {
+    throw new ApiError(400, "user is not gettin");
   }
-  res.status(200).json(new ApiResponse(200,user,"user is presenetHere"));
+  res.status(200).json(new ApiResponse(200, user, "user is presenetHere"));
 });
 
 export {
