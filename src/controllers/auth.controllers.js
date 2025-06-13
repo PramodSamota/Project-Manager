@@ -11,6 +11,7 @@ import { ApiResponse } from "../utils/api-response.js";
 
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
+import mongoose from "mongoose";
 
 const registerUser = asyncHandler(async (req, res) => {
 
@@ -31,7 +32,7 @@ const registerUser = asyncHandler(async (req, res) => {
   })
 
    if(!user){
-     throw new ApiError("user is not create", error);
+     throw new ApiError("user is not create", 400);
    }
 
    const {hashedToken,unHashedToken,tokenExpiry} = user.generateTemporaryToken();
@@ -100,7 +101,7 @@ const verifyEmail = asyncHandler(async (req, res) => {
           console.log(typeof hashedToken);
 
   const user = await User.findOne({
-          emailVerificationToken:hashedToken,
+          emailVerificationToken:new mongoose.Types.ObjectId(hashedToken),
           emailVerificationExpiry:{$gt: new Date()}                     
   })
 
@@ -248,7 +249,7 @@ const forgotPasswordRequest = asyncHandler(async (req, res) => {
     console.log(hashedToken);
 
   const user = await User.findOne({
-          forgotPasswordToken: hashedToken, 
+          forgotPasswordToken: new mongoose.Types.ObjectId(hashedToken), 
           forgotPasswordExpiry:{$gt: new Date()}                   
   })
          console.log(user);
@@ -315,7 +316,7 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
         console.log(decodeToken);
 
     } catch (error) {
-        throw new ApiError("refreshtToken is wronge",400);
+        throw new ApiError("refreshtToken is wronge",error);
     }
 
       const user = await User.findById(decodeToken._id);
