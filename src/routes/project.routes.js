@@ -11,7 +11,7 @@ import {
   updateMemberRole,
 } from "../controllers/project.controllers.js";
 
-import { isLoggedIn } from "../middlewares/auth.middleware";
+import { isLoggedIn } from "../middlewares/auth.middleware.js";
 
 const router = Router();
 

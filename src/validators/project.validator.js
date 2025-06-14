@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { UserRolesEnum } from "../utils/constants";
+import { UserRolesEnum } from "../utils/constants.js";
 
 const createProjectSchema = z.object({
   name: z.string().trim().nonempty("Project name is required"),
@@ -18,7 +18,6 @@ const addProjectMemberSchema = z.object({
 });
 
 const memberRoleValidation = addProjectMemberSchema.pick({ role: true });
-
 
 const validateCreateProjectData = (data) => {
   return createProjectSchema.safeParse(data);

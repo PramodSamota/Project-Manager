@@ -1,32 +1,34 @@
 import { asyncHandler } from "../utils/async-handler.js";
 import { User } from "../models/user.models.js";
+import crypto from "crypto";
+import jwt from "jsonwebtoken";
+
+import { env } from "../validators/env.js";
 import {
   validateChangePassword,
   validateEmailData,
   validateLoginData,
   validateRegisterData,
-  validateResetPassword,
+  // validateResetPassword,
 } from "../validators/auth.js";
-import { ApiError } from "../utils/api-error.js";
-import { env } from "../validators/env.js";
 import {
   sendEmail,
   emailVerificationMailgenContent,
   forgotPasswordMailgenContent,
 } from "../utils/mail.js";
+import { ApiError } from "../utils/api-error.js";
 import { ApiResponse } from "../utils/api-response.js";
-
-import crypto from "crypto";
-import jwt from "jsonwebtoken";
-import mongoose from "mongoose";
+import { handleZodError } from "../utils/handleZodError.js";
 
 const registerUser = asyncHandler(async (req, res) => {
-  const { email, username, password } = validateRegisterData(req.body).data;
+  const { email, username, password } = handleZodError(
+    validateRegisterData(req.body),
+  );
 
   const existingUser = await User.findOne({ email });
 
   if (existingUser) {
-    throw new ApiError("User is already exist", 400);
+    throw new ApiError(409, "User is already exist");
   }
 
   const user = await User.create({
@@ -36,7 +38,7 @@ const registerUser = asyncHandler(async (req, res) => {
   });
 
   if (!user) {
-    throw new ApiError("user is not create", 400);
+    throw new ApiError(400, "user is not create");
   }
 
   const { hashedToken, unHashedToken, tokenExpiry } =
@@ -68,40 +70,13 @@ const registerUser = asyncHandler(async (req, res) => {
     );
 });
 
-const logoutUser = asyncHandler(async (req, res) => {
-  const userId = req?.user?._id;
-  console.log(req.user);
-  if (!userId) {
-    throw new ApiError("Authentication failed", 400);
-  }
-
-  const userInfo = await User.findById(userId);
-
-  if (!userInfo) {
-    throw new ApiError("Failed to get user", 400);
-  }
-
-  // Clear the refresh token in the DB
-  userInfo.refreshToken = null;
-  await userInfo.save();
-
-  // Clear the cookies on client
-  res.clearCookie("accessToken");
-
-  res.clearCookie("refreshToken");
-
-  res
-    .status(200)
-    .json(new ApiResponse(200, null, "User is successfully logged out"));
-});
-
 const verifyEmail = asyncHandler(async (req, res) => {
   console.log(req.params);
   const unHashedToken = req.params.unHashedToken;
   console.log("unHashedToken", unHashedToken);
 
   if (!unHashedToken) {
-    throw new ApiError("token is not geting from URL", 400);
+    throw new ApiError(400, "token is not geting from URL");
   }
 
   const hashedToken = crypto
@@ -109,17 +84,15 @@ const verifyEmail = asyncHandler(async (req, res) => {
     .update(unHashedToken)
     .digest("hex");
 
-  console.log(typeof hashedToken);
-
   const user = await User.findOne({
-    emailVerificationToken: new mongoose.Types.ObjectId(hashedToken),
+    emailVerificationToken: hashedToken,
     emailVerificationExpiry: { $gt: new Date() },
   });
 
   console.log(user);
 
   if (!user) {
-    throw new ApiError("email is not verified", 400);
+    throw new ApiError(404, "User is not found");
   }
   user.emailVerificationToken = undefined;
   user.emailVerificationExpiry = undefined;
@@ -133,22 +106,22 @@ const verifyEmail = asyncHandler(async (req, res) => {
 });
 
 const loginUser = asyncHandler(async (req, res) => {
-  const { email, password } = validateLoginData(req.body).data;
+  const { email, password } = handleZodError(validateLoginData(req.body));
 
   const user = await User.findOne({ email });
 
   if (!user) {
-    throw new ApiError("Crendtials are wronge ", 400);
+    throw new ApiError(401, "Crendtials are wronge ");
   }
 
   if (!user.isEmailVerified) {
-    throw new ApiError("email is not verify ", 400);
+    throw new ApiError(400, "email is not verify ");
   }
 
   const verifyPassword = user.isPasswordCorrect(password);
 
   if (!verifyPassword) {
-    throw new ApiError("Crendtials are wronge ", 400);
+    throw new ApiError(401, "Crendtials are wronge ");
   }
 
   const accessToken = user.generateAccessToken();
@@ -171,23 +144,21 @@ const loginUser = asyncHandler(async (req, res) => {
 
 const resendEmailVerification = asyncHandler(async (req, res) => {
   // console.log(req.body);
-  const { email } = validateEmailData(req.body).data;
+  const { email } = handleZodError(validateEmailData(req.body));
 
   if (!email) {
-    throw new ApiError("please provide correct email", 400);
+    throw new ApiError(400, "please provide correct email");
   }
 
   const user = await User.findOne({ email });
 
-  // i am avoiding this command right now bcz i want to continue;
-  // if(user.isEmailVerified){
-
-  // }
-
   if (!user) {
-    throw new ApiError("No user found for this email", 400);
+    throw new ApiError(404, "No user found for this email");
   }
 
+  if (user.isEmailVerified) {
+    throw new ApiError(400, "User is already verified");
+  }
   const { hashedToken, unHashedToken, tokenExpiry } =
     user.generateTemporaryToken();
 
@@ -208,16 +179,16 @@ const resendEmailVerification = asyncHandler(async (req, res) => {
 });
 
 const resetForgottenPassword = asyncHandler(async (req, res) => {
-  const { email } = validateEmailData(req.body).data;
+  const { email } = handleZodError(validateEmailData(req.body));
 
   if (!email) {
-    throw new ApiError("please provide correct email", 400);
+    throw new ApiError(400, "please provide correct email");
   }
 
   const user = await User.findOne({ email });
 
   if (!user) {
-    throw new ApiError("No user found for this email", 400);
+    throw new ApiError(404, "No user found for this email");
   }
 
   const { hashedToken, unHashedToken, tokenExpiry } =
@@ -239,64 +210,61 @@ const resetForgottenPassword = asyncHandler(async (req, res) => {
 
 //this not working
 const forgotPasswordRequest = asyncHandler(async (req, res) => {
-  const { unHashedToken } = req.params;
-
-  const { password, confirmPassword } = validateResetPassword(req.body).data;
-
-  if (password !== confirmPassword) {
-    throw new ApiError("write the same Password", 400);
-  }
+  const unHashedToken = req.params.unHashedToken;
+  console.log("unHashedToken", unHashedToken);
 
   if (!unHashedToken) {
-    throw new ApiError("token is not geting from URL", 400);
+    throw new ApiError(400, "token is not geting from URL");
   }
+
+  const { newPassword } = req.body;
+
   const hashedToken = crypto
     .createHash("sha256")
     .update(unHashedToken)
     .digest("hex");
-  console.log(hashedToken);
 
   const user = await User.findOne({
-    forgotPasswordToken: new mongoose.Types.ObjectId(hashedToken),
+    forgotPasswordToken: hashedToken,
     forgotPasswordExpiry: { $gt: new Date() },
   });
-  console.log(user);
 
   if (!user) {
-    throw new ApiError("user is not get via hashedToken", 400);
+    throw new ApiError(400, "User not found on forgotPasswordReset");
   }
 
+  user.password = newPassword;
   user.forgotPasswordToken = undefined;
   user.forgotPasswordExpiry = undefined;
-
-  user.password = password;
 
   await user.save();
 
   res
     .status(200)
-    .json(new ApiResponse(200, user, "password is change succesfull"));
+    .json(new ApiResponse(200, user, " Password reset successfully"));
 });
 
 const changeCurrentPassword = asyncHandler(async (req, res) => {
-  const { oldPassword, newPassword } = validateChangePassword(req.body).data;
+  const { oldPassword, newPassword } = handleZodError(
+    validateChangePassword(req.body),
+  );
 
   const userId = req.user._id;
 
   if (!userId) {
-    throw new ApiError("did not get userId ", 400);
+    throw new ApiError(401, "did not get userId ");
   }
 
   const user = await User.findOne({ _id: userId });
 
   if (!userId) {
-    throw new ApiError("user is not get", 400);
+    throw new ApiError(404, "user is not get");
   }
 
   const isPasswordMatch = user.isPasswordCorrect(oldPassword);
 
   if (!isPasswordMatch) {
-    throw new ApiError("your Old password is wronge", 400);
+    throw new ApiError(401, "your Old password is wronge");
   }
 
   user.password = newPassword;
@@ -306,11 +274,8 @@ const changeCurrentPassword = asyncHandler(async (req, res) => {
   res.status(200).json(new ApiResponse(200, user, "newPassword is set"));
 });
 
-//take look on refreshToken
 const refreshAccessToken = asyncHandler(async (req, res) => {
-  console.log(req.cookies);
   const refreshToken = req.cookies.refreshToken;
-  console.log(refreshToken);
 
   if (!refreshToken) {
     throw new ApiError(400, "refresh Token does not provided");
@@ -327,7 +292,7 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
   const user = await User.findById(decodeToken._id);
 
   if (!user) {
-    throw new ApiError(400, "user is not getting");
+    throw new ApiError(404, "user not found in process of refresshAccessToken");
   }
   const accessToken = user.generateAccessToken();
 
@@ -347,9 +312,36 @@ const getCurrentUser = asyncHandler(async (req, res) => {
   const user = req.user;
 
   if (!user) {
-    throw new ApiError(400, "user is not gettin");
+    throw new ApiError(401, "user is not getting");
   }
   res.status(200).json(new ApiResponse(200, user, "user is presenetHere"));
+});
+
+const logoutUser = asyncHandler(async (req, res) => {
+  const userId = req.user._id;
+
+  if (!userId) {
+    throw new ApiError(401, "Authentication failed");
+  }
+
+  const userInfo = await User.findById(userId);
+
+  if (!userInfo) {
+    throw new ApiError(404, "Failed to get user");
+  }
+
+  // Clear the refresh token in the DB
+  userInfo.refreshToken = null;
+  await userInfo.save();
+
+  // Clear the cookies on client
+  res.clearCookie("accessToken");
+
+  res.clearCookie("refreshToken");
+
+  res
+    .status(204)
+    .json(new ApiResponse(204, null, "User is successfully logged out"));
 });
 
 export {

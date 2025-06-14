@@ -1,4 +1,3 @@
-
 import { z } from "zod";
 
 const registerSchema = z.object({
@@ -26,13 +25,7 @@ const loginSchema = registerSchema.omit({
 });
 
 const emailVerification = registerSchema.pick({ email: true });
-const resetPasswordSchema = registerSchema
-  .pick({ password: true })
-  .extend({ confirmPassword: z.string() })
-  .refine((data) => data.password === data.confirmPassword, {
-    message: "Passwords do not match",
-    path: ["confirmPassword"],
-  });
+const resetPasswordSchema = registerSchema.pick({ newPassword: true });
 
 const changeCurrentPassword = z.object({
   oldPassword: z
@@ -52,7 +45,6 @@ const changeCurrentPassword = z.object({
         "Password must include at least one uppercase letter, one lowercase letter, one number, and one special character.",
     }),
 });
-
 
 const validateRegisterData = (data) => {
   return registerSchema.safeParse(data);

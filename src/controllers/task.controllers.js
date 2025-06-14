@@ -12,7 +12,7 @@ const getTasks = asyncHandler(async (req, res) => {
   const { pid } = req.params;
 
   if (!pid) {
-    throw new ApiError(403, "Tasks not feteched");
+    throw new ApiError(403, "project Id not get");
   }
 
   const allTasks = await Task.find({ project: pid });
