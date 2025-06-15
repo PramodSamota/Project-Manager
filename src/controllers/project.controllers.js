@@ -13,7 +13,7 @@ import {
 } from "../validators/project.validator.js";
 import { User } from "../models/user.models.js";
 import { UserRolesEnum } from "../utils/constants.js";
-
+import { validateObjectId } from "../utils/helper.js";
 import logger from "../utils/logger.js";
 
 const getProjects = asyncHandler(async (req, res) => {
@@ -23,55 +23,64 @@ const getProjects = asyncHandler(async (req, res) => {
     throw new ApiError(404, "user is not found!");
   }
 
-  const projects = await ProjectMember.aggregate([
-    {
-      $match: { user: new mongoose.Types.ObjectId.createFromHexString(userId) },
+  const projects = await ProjectMember.find({ user: userId }).populate({
+    path: "project",
+    populate: {
+      path: "createdBy",
+      select: "username email", // Project creator
     },
-    {
-      $lookup: {
-        from: "projects",
-        localField: "project",
-        foreignField: "_id",
-        as: "projectData",
-      },
-    },
-    {
-      $unwind: "$projectData",
-    },
-    {
-      $lookup: {
-        from: "users",
-        localField: "projectData.createdBy",
-        foreignField: "_id",
-        as: "userData",
-      },
-    },
-    {
-      $unwind: "$userData",
-    },
-    {
-      $lookup: {
-        from: "projectmembers",
-        localField: "project",
-        foreignField: "project",
-        as: "members",
-      },
-    },
-    {
-      $project: {
-        _id: 0,
-        pid: "$projectData._id",
-        name: "$projectData.name",
-        description: "$projectData.description",
-        createdBy: {
-          username: "$userData.username",
-          email: "$userData.email",
-        },
-        role: 1,
-        totalMembers: { $size: "$members" },
-      },
-    },
-  ]);
+    select: "name description createdBy", // Fields from Project
+  });
+
+  //const projects = await ProjectMember.aggregate([
+  // {
+  //   $match: { user: userId },
+  // },
+  // {
+  //   $lookup: {
+  //     from: "projects",
+  //     localField: "project",
+  //     foreignField: "_id",
+  //     as: "projectData",
+  //   },
+  // },
+  // {
+  //   $unwind: "$projectData",
+  // },
+  // {
+  //   $lookup: {
+  //     from: "users",
+  //     localField: "projectData.createdBy",
+  //     foreignField: "_id",
+  //     as: "userData",
+  //   },
+  // },
+  // {
+  //   $unwind: "$userData",
+  // },
+  // {
+  //   $lookup: {
+  //     from: "projectmembers",
+  //     localField: "project",
+  //     foreignField: "project",
+  //     as: "members",
+  //   },
+  // },
+  // {
+  //   $project: {
+  //     _id: 0,
+  //     pid: "$projectData._id",
+  //     name: "$projectData.name",
+  //     description: "$projectData.description",
+  //     createdBy: {
+  //       username: "$userData.username",
+  //       email: "$userData.email",
+  //     },
+  //     role: 1,
+  //     totalMembers: { $size: "$members" },
+  //   },
+  // },
+  //]);
 
   res
     .status(200)
@@ -80,146 +89,66 @@ const getProjects = asyncHandler(async (req, res) => {
 
 const getProjectById = asyncHandler(async (req, res) => {
   const { pid } = req.params;
+  validateObjectId(pid, "project");
 
   if (!pid) {
     throw new ApiError(404, "projectId not getting");
   }
 
   //try this way also
-  /*
-         const project = await Project.findById(pid)
-    .populate({
-      path: "createdBy",
-      select: "fullName username email avatar.url -_id",
-    })
-    .lean();
+
+  const project = await Project.findById(pid).populate({
+    path: "createdBy",
+    select: "fullName username email avatar.url -_id",
+  });
 
   if (!project) {
     throw new ApiError("Project not found", 404);
   }
 
-  const members = await ProjectMember.find({ project: pid })
+  const member = await ProjectMember.find({ project: pid })
     .populate({
       path: "user",
       select: "fullName username email avatar.url -_id",
     })
-    .select("role -_id")
-    .lean();
+    .select("role -_id");
 
   const fullData = {
     name: project.name,
     description: project.description,
     updatedAt: project.updatedAt,
     createdBy: project.createdBy,
-    members: members.map((m) => ({
+    members: member.map((m) => ({
       role: m.role,
-      ...m.user,
+      user: m.user,
     })),
   };
-
-  res.status(200).json(new ApiResponse(200, fullData, "Project fetched"));
-        */
-
-  const project = await Project.aggregate([
-    {
-      $match: { _id: new mongoose.Types.ObjectId.createFromHexString(pid) },
-    },
-    {
-      $lookup: {
-        from: "users",
-        localField: "createdBy",
-        foreignField: "_id",
-        as: "createdBy",
-      },
-    },
-    {
-      $unwind: "$createdBy",
-    },
-    {
-      $lookup: {
-        from: "projectmembers",
-        localField: "_id",
-        foreignField: "project",
-        as: "membersData",
-      },
-    },
-
-    {
-      $unwind: {
-        path: "$membersData",
-        preserveNullAndEmptyArrays: true,
-      },
-    },
-    {
-      $lookup: {
-        from: "users",
-        localField: "membersData.user",
-        foreignField: "_id",
-        as: "membersData.userData",
-      },
-    },
-    {
-      $unwind: {
-        path: "$membersData.userData",
-        preserveNullAndEmptyArrays: true,
-      },
-    },
-    {
-      $group: {
-        _id: "$_id",
-        name: { $first: "$name" },
-        description: { $first: "$description" },
-        updatedAt: { $first: "$updatedAt" },
-        createdBy: { $first: "$createdBy" },
-        members: {
-          $push: {
-            role: "$membersData.role",
-            fullName: "$membersData.userData.fullName",
-            username: "$membersData.userData.username",
-            email: "$membersData.userData.email",
-            avatar: "$membersData.userData.avatar.url",
-          },
-        },
-      },
-    },
-    {
-      $project: {
-        _id: 0,
-        name: 1,
-        description: 1,
-        updatedAt: 1,
-        createdBy: {
-          fullName: "$createdBy.fullName",
-          username: "$createdBy.username",
-          email: "$createdBy.email",
-          avatar: "$createdBy.avatar.url",
-        },
-        members: 1,
-      },
-    },
-  ]);
 
   if (!project) {
     throw new ApiError(404, "project not found");
   }
 
-  res.status(200).json(200, project, "Project fetched successfully");
+  res
+    .status(200)
+    .json(new ApiResponse(200, fullData, "Project fetched successfully"));
 });
 
 const createProject = asyncHandler(async (req, res) => {
   const { name, description } = handleZodError(
-    validateCreateProjectData(req.boyd),
+    validateCreateProjectData(req.body),
   );
 
   const createdBy = req.user._id;
 
   if (!createdBy) {
-    throw new ApiError(404, "user is not get");
+    throw new ApiError(404, "user is not found");
   }
 
-  // here want to use transaction
+  // Transation on work on locak db;
+  /*
   const clientSession = await mongoose.startSession();
   clientSession.startTransaction();
+  
   let createdProject;
   try {
     createdProject = await Project.create(
@@ -230,7 +159,6 @@ const createProject = asyncHandler(async (req, res) => {
           createdBy,
         },
       ],
-
       { session: clientSession },
     );
 
@@ -245,17 +173,35 @@ const createProject = asyncHandler(async (req, res) => {
       ],
       { session: clientSession },
     );
+
     await clientSession.commitTransaction();
-  } catch (error) {
+  } 
+  catch (error) {
     await clientSession.abortTransaction();
+
     logger.error(`Error occurred while creating project: ${error}`);
+
     if (error.code === 11000) {
-      throw new ApiError("Project name must be unique per user", 400);
+      throw new ApiError(400, "Project name must be unique per user");
     }
-    throw new ApiError(`Error while creating user ${error.message}`, 500);
+    throw new ApiError(500, `Error while creating user ${error.message}`);
   } finally {
     await clientSession.endSession();
   }
+*/
+  // Without session for local dev
+  const createdProject = await Project.create({
+    name,
+    description,
+    createdBy,
+  });
+
+  await ProjectMember.create({
+    user: createdProject.createdBy,
+    project: createdProject._id,
+    role: UserRolesEnum.ADMIN,
+  });
+
   res
     .status(200)
     .json(new ApiResponse(200, createdProject, "Project created successfully"));
