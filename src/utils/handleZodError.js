@@ -1,6 +1,8 @@
 
+import { ApiError } from "./api-error.js";
 
-import { ApiError } from "./ApiError";
+
+
 
 const handleZodError = (result) => {
   if (!result.success) {
@@ -11,15 +13,19 @@ const handleZodError = (result) => {
 
     if (missing) {
       throw new ApiError(
-        `Missing required field: [${result.error.issues[0].path.join(".").toUpperCase()}]`,
+
         500,
+        `Missing required field: [${result.error.issues[0].path.join(".").toUpperCase()}]`,
       );
     }
 
-    throw new ApiError(result.error.issues[0].message, 500);
+    throw new ApiError(500, result.error.issues[0].message);
+
   }
 
   return result.data;
 };
 
+
 export { handleZodError };
+
