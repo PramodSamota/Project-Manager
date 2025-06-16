@@ -208,7 +208,7 @@ const getProjectById = asyncHandler(async (req, res) => {
 
 const createProject = asyncHandler(async (req, res) => {
   const { name, description } = handleZodError(
-    validateCreateProjectData(req.boyd),
+    validateCreateProjectData(req.body),
   );
 
   const createdBy = req.user._id;
