@@ -3,7 +3,6 @@ import { User } from "../models/user.models.js";
 
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
-// import mongoose from "mongoose";
 
 import { env } from "../validators/env.js";
 import {
