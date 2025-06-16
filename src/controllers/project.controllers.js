@@ -210,12 +210,15 @@ const createProject = asyncHandler(async (req, res) => {
 const updateProject = asyncHandler(async (req, res) => {
   const { pid } = req.params;
 
-  if (!pid) {
+  validateObjectId(pid, "Project");
+  const project = await Project.findById(pid);
+
+  if (!project) {
     throw new ApiError(404, "project not fetched successfully");
   }
 
   const { name, description } = handleZodError(
-    validateUpdateProjectData(req.boyd),
+    validateUpdateProjectData(req.body),
   );
 
   const projectUpdate = await Project.findByIdAndUpdate(
@@ -236,8 +239,12 @@ const updateProject = asyncHandler(async (req, res) => {
 const deleteProject = asyncHandler(async (req, res) => {
   const { pid } = req.params;
 
-  if (!pid) {
-    throw new ApiError(404, "ProjectId not feteched");
+  validateObjectId(pid, "Project");
+
+  const project = await Project.findById(pid);
+
+  if (!project) {
+    throw new ApiError(404, "project not fetched successfully");
   }
 
   const clientSession = await mongoose.startSession();
@@ -250,7 +257,7 @@ const deleteProject = asyncHandler(async (req, res) => {
       session: clientSession,
     });
     await ProjectMember.deleteMany(
-      { project: new mongoose.Types.ObjectId(pid) },
+      { project: pid },
       {
         session: clientSession,
       },
@@ -259,6 +266,7 @@ const deleteProject = asyncHandler(async (req, res) => {
     await clientSession.commitTransaction();
   } catch (error) {
     await clientSession.abortTransaction();
+
     logger.error(`Error while deleting project: ${error}`);
     throw new ApiError(500, `Error while deleting project: ${error.message}`);
   } finally {
@@ -274,13 +282,17 @@ const deleteProject = asyncHandler(async (req, res) => {
 const getProjectMembers = asyncHandler(async (req, res) => {
   const { pid } = req.params;
 
-  if (!pid) {
-    throw new ApiError(400, "ProjectId not feteched");
-  }
+  validateObjectId(pid, "Project");
 
+  const project = await Project.findById(pid);
+
+  if (!project) {
+    throw new ApiError(404, "project not fetched successfully");
+  }
+  /*
   const projectMembers = await ProjectMember.aggregate([
     {
-      $match: { project: new mongoose.Types.ObjectId(pid) },
+      $match: { project: pid },
     },
     {
       $lookup: {
@@ -301,20 +313,18 @@ const getProjectMembers = asyncHandler(async (req, res) => {
         "user.email": 1,
         "user.fullName": 1,
         "user.avatar": 1,
-        // exclude _id from user
-        "user._id": 0,
       },
     },
   ]);
 
-  /*
- const projectMembers = await ProjectMember.find({
+  */
+
+  const projectMembers = await ProjectMember.find({
     project: pid,
   })
     .populate({ path: "user", select: "username email fullName avatar -_id" })
     .select("role updatedAt");
-   })
-*/
+
   if (!projectMembers) {
     throw new ApiError(404, "Projec member not feteched");
   }
@@ -331,15 +341,19 @@ const getProjectMembers = asyncHandler(async (req, res) => {
 });
 
 const addMemberToProject = asyncHandler(async (req, res) => {
+  const { pid } = req.params;
+
+  validateObjectId(pid, "Project");
+
+  const project = await Project.findById(pid);
+
+  if (!project) {
+    throw new ApiError(404, "project not fetched successfully");
+  }
+
   const { email, role } = handleZodError(
     validateAddProjectMemberData(req.body),
   );
-
-  const { pid } = req.params;
-
-  if (!pid) {
-    throw new ApiError(400, "project Id not fetched from URL");
-  }
 
   const user = await User.findOne({ email, isEmailVerified: true });
 
@@ -347,12 +361,13 @@ const addMemberToProject = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Email is wronge and user is not verified");
   }
 
-  const existinMember = await ProjectMember.findOne({
+  const existingMember = await ProjectMember.findOne({
     user: user._id,
     project: pid,
   });
 
-  if (existinMember) {
+  console.log(existingMember);
+  if (existingMember) {
     throw new ApiError(400, "User is already present in project");
   }
 
@@ -366,37 +381,29 @@ const addMemberToProject = asyncHandler(async (req, res) => {
     throw new ApiError(400, "projectMember does not add to project");
   }
 
-  res.status(201).json(200, projecMember, "ProjectMember add Successfully");
-});
-
-const deleteMember = asyncHandler(async (req, res) => {
-  const { mid } = req.params;
-
-  const member = await ProjectMember.findByIdAndDelete(mid);
-
-  if (!member) {
-    throw new ApiError(400, "Member not deleted Successfull");
-  }
-
-  res.status(200).json(200, member, "Member deleted Successfully");
+  res
+    .status(201)
+    .json(new ApiResponse(200, projecMember, "ProjectMember add Successfully"));
 });
 
 const updateMemberRole = asyncHandler(async (req, res) => {
-  const { role } = handleZodError(validateUpdateMemberData(req.body));
-
   const { mid } = req.params;
+  // console.log("mid:", mid);
+  validateObjectId(mid, "member");
+  const { role } = handleZodError(validateUpdateMemberData(req.body));
+  // console.log("role", role);
 
   const existingMember = await ProjectMember.findById(mid);
 
   if (!existingMember) {
-    throw new ApiError(400, "member does not exit");
+    throw new ApiError(404, "member does not exit");
   }
 
   if (existingMember.role === role) {
     throw new ApiError(400, "Member already have same role");
   }
 
-  const updaterole = ProjectMember.findByIdAndUpdate(
+  const updaterole = await ProjectMember.findByIdAndUpdate(
     mid,
     {
       role,
@@ -410,7 +417,27 @@ const updateMemberRole = asyncHandler(async (req, res) => {
     throw new ApiError(400, "update role failed");
   }
 
-  res.status(200).json(200, updaterole, "role updated successfully");
+  res
+    .status(200)
+    .json(new ApiResponse(200, updaterole, "role updated successfully"));
+});
+
+const deleteMember = asyncHandler(async (req, res) => {
+  const { mid } = req.params;
+
+  const member = await ProjectMember.findById(mid);
+  if (!member) {
+    throw new ApiError(404, "Member not Found");
+  }
+  const deletedmember = await ProjectMember.findByIdAndDelete(mid);
+
+  if (!deletedmember) {
+    throw new ApiError(400, "Member not deleted Successfull");
+  }
+
+  res
+    .status(200)
+    .json(new ApiResponse(200, deletedmember, "Member deleted Successfully"));
 });
 
 export {
