@@ -14,7 +14,6 @@ import {
 import { User } from "../models/user.models.js";
 import { UserRolesEnum } from "../utils/constants.js";
 import { validateObjectId } from "../utils/helper.js";
-import logger from "../utils/logger.js";
 
 const getProjects = asyncHandler(async (req, res) => {
   const userId = req.user._id;
@@ -250,8 +249,7 @@ const deleteProject = asyncHandler(async (req, res) => {
   const clientSession = await mongoose.startSession();
   clientSession.startTransaction();
 
-  let deletedProject;
-
+  /*
   try {
     deletedProject = await Project.findByIdAndDelete(pid, {
       session: clientSession,
@@ -272,6 +270,30 @@ const deleteProject = asyncHandler(async (req, res) => {
   } finally {
     await clientSession.endSession();
   }
+*/
+
+  const deletedProject = await Project.findByIdAndDelete(pid);
+
+  if (!deletedProject) {
+    throw new ApiError(404, "Project not delete");
+  }
+
+  // Delete all project members
+  const projectMembers = await ProjectMember.deleteMany({ project: pid });
+
+  if (!projectMembers) {
+    throw new ApiError(404, "ProjectMembers not deleted");
+  }
+  res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        { deletedProjectId: pid },
+        "Project deleted successfully",
+      ),
+    );
+
   res
     .status(200)
     .json(
