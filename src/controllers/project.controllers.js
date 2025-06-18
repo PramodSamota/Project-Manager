@@ -195,11 +195,14 @@ const createProject = asyncHandler(async (req, res) => {
     createdBy,
   });
 
-  await ProjectMember.create({
+  const projetMember = await ProjectMember.create({
     user: createdProject.createdBy,
     project: createdProject._id,
     role: UserRolesEnum.ADMIN,
   });
+
+  await createdProject.save();
+  await projetMember.save();
 
   res
     .status(200)
@@ -225,6 +228,8 @@ const updateProject = asyncHandler(async (req, res) => {
     { name, description },
     { new: true },
   );
+
+  await projectUpdate.save();
 
   if (!projectUpdate) {
     throw new ApiError(400, "project not update successfully");
@@ -402,7 +407,7 @@ const addMemberToProject = asyncHandler(async (req, res) => {
   if (!projecMember) {
     throw new ApiError(400, "projectMember does not add to project");
   }
-
+  await projecMember.save();
   res
     .status(201)
     .json(new ApiResponse(200, projecMember, "ProjectMember add Successfully"));
@@ -438,7 +443,7 @@ const updateMemberRole = asyncHandler(async (req, res) => {
   if (!updaterole) {
     throw new ApiError(400, "update role failed");
   }
-
+  await updaterole.save();
   res
     .status(200)
     .json(new ApiResponse(200, updaterole, "role updated successfully"));

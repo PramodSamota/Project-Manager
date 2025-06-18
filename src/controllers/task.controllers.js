@@ -1,18 +1,29 @@
 import { ApiError } from "../utils/api-error.js";
 import { ApiResponse } from "../utils/api-response.js";
-// import { handleZodError } from "../utils/handleZodError.js";
+import { handleZodError } from "../utils/handleZodError.js";
 import { Task } from "../models/task.models.js";
-import { asyncHandler } from "../utils/async-handler";
+import { asyncHandler } from "../utils/async-handler.js";
 import { User } from "../models/user.models.js";
 import { ProjectMember } from "../models/projectmember.models.js";
+import { Project } from "../models/project.models.js";
 import mongoose from "mongoose";
 import { SubTask } from "../models/subtask.models.js";
+import { validateObjectId } from "../utils/helper.js";
+import {
+  validateSubTaskData,
+  validateTaskData,
+  validateUpdateTaskData,
+} from "../validators/task.validator.js";
+
 // get all tasks
 const getTasks = asyncHandler(async (req, res) => {
   const { pid } = req.params;
+  validateObjectId(pid, "project");
 
-  if (!pid) {
-    throw new ApiError(403, "project Id not get");
+  const project = await Project.findById(pid);
+
+  if (!project) {
+    throw new ApiError(404, "project not found");
   }
 
   const allTasks = await Task.find({ project: pid });
@@ -29,10 +40,7 @@ const getTasks = asyncHandler(async (req, res) => {
 // get task by id
 const getTaskById = asyncHandler(async (req, res) => {
   const { tid } = req.params;
-
-  if (!tid) {
-    throw new ApiError(400, "task id is wrong");
-  }
+  validateObjectId(tid, "task");
 
   const task = await Task.findById(tid);
 
@@ -47,18 +55,25 @@ const getTaskById = asyncHandler(async (req, res) => {
 
 // create task
 const createTask = asyncHandler(async (req, res) => {
-  const { title, description, email } = req.body;
+  const { title, description, email } = handleZodError(
+    validateTaskData(req.body),
+  );
+
   const { pid } = req.params;
-  const { uid } = req.user._id;
+  validateObjectId(pid, "Project");
+  const uid = req.user._id;
 
-  const assigneToUser = await User.findOne({ email });
-
-  if (!assigneToUser) {
-    throw new ApiError(400, "assignUser not found");
+  const project = await Project.findById(pid);
+  if (!project) {
+    throw new ApiError(400, "Project not found");
   }
 
-  const member = await ProjectMember.findById(assigneToUser._id);
+  const assigneToUser = await User.findOne({ email });
+  if (!assigneToUser) {
+    throw new ApiError(400, "assignedUser not found");
+  }
 
+  const member = await ProjectMember.findOne({ user: assigneToUser });
   if (!member) {
     throw new ApiError(400, "User is not member the  project");
   }
@@ -74,21 +89,33 @@ const createTask = asyncHandler(async (req, res) => {
   if (!task) {
     throw new ApiError(400, "task not created");
   }
-
+  await task.save();
   //upload the attchement on cloudinary
 
-  res.status(201, task, "task is created successfully");
+  res
+    .status(201)
+    .json(new ApiResponse(201, task, "task is created successfully"));
 });
 
 // update task
 const updateTask = asyncHandler(async (req, res) => {
   const { pid, tid } = req.params;
 
-  const { title, description, status } = req.body;
+  validateObjectId(tid, "task");
+  validateObjectId(pid, "Project");
+
+  const { title, description, status } = handleZodError(
+    validateUpdateTaskData(req.body),
+  );
+
+  const project = await Project.findById(pid);
+  if (!project) {
+    throw new ApiError(400, "Project not found");
+  }
 
   const updatedTask = await Task.findByIdAndUpdate(
     tid,
-    { title, description, project: pid, status },
+    { title, description, status },
     { new: true },
   );
 
@@ -98,8 +125,9 @@ const updateTask = asyncHandler(async (req, res) => {
 
   res
     .status(200)
-    .json(new ApiResponse(200, updateTask, "Task is updated successfully"));
+    .json(new ApiResponse(200, updatedTask, "Task is updated successfully"));
 });
+
 // delete task
 const deleteTask = asyncHandler(async (req, res) => {
   const { tid } = req.params;
@@ -123,14 +151,18 @@ const deleteTask = asyncHandler(async (req, res) => {
 
 // create subtask
 const createSubTask = asyncHandler(async (req, res) => {
-  const { tid, sid } = req.params;
-  const { uid } = req.user._id;
+  const { tid } = req.params;
+  const uid = req.user._id;
 
-  if (!sid) {
-    throw new ApiError(400, "SubTask id not provided");
+  validateObjectId(tid, "task");
+
+  const { title } = handleZodError(validateSubTaskData(req.body));
+  // const { title } = req.body;
+
+  const task = await Task.findById(tid);
+  if (!task) {
+    throw new ApiError(404, "Task not found");
   }
-
-  const { title } = req.body;
 
   const subTask = await SubTask.create({
     title,
@@ -141,6 +173,7 @@ const createSubTask = asyncHandler(async (req, res) => {
   if (!subTask) {
     throw new ApiError(400, "SubTask not create");
   }
+  await subTask.save();
 
   res
     .status(201)
@@ -149,8 +182,11 @@ const createSubTask = asyncHandler(async (req, res) => {
 
 // update subtask
 const updateSubTask = asyncHandler(async (req, res) => {
-  const { title, isCompleted } = req.body;
+  const { title, isCompleted } = handleZodError(
+    validateUpdateTaskData(req.body),
+  );
   const { sid } = req.params;
+  validateObjectId(sid, "subTaskId");
 
   const updatedsubTask = await SubTask.findByIdAndUpdate(
     sid,
@@ -169,15 +205,15 @@ const updateSubTask = asyncHandler(async (req, res) => {
 
   res
     .status(200)
-    .json(new ApiResponse(200, null, "SubTask is updated successfully"));
+    .json(
+      new ApiResponse(200, updatedsubTask, "SubTask is updated successfully"),
+    );
 });
 
 // delete subtask
 const deleteSubTask = async (req, res) => {
   const { sid } = req.params;
-  if (!sid) {
-    throw new ApiError(403, "SubTaks Id not provided");
-  }
+  validateObjectId(sid, "subTask");
 
   const deletedSubTask = await SubTask.findByIdAndDelete(sid);
 
@@ -189,6 +225,9 @@ const deleteSubTask = async (req, res) => {
     .json(new ApiResponse(200, null, "SubTask is Delete successfully"));
 };
 
+//TODO: addAttchements
+
+//TODO: delteAttchements
 export {
   createSubTask,
   createTask,

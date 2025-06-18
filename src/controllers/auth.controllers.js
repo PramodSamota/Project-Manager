@@ -280,7 +280,7 @@ const changeCurrentPassword = asyncHandler(async (req, res) => {
 });
 
 const refreshAccessToken = asyncHandler(async (req, res) => {
-  const refreshToken = req.cookies.refreshToken;
+  let refreshToken = req.cookies.refreshToken;
 
   if (!refreshToken) {
     throw new ApiError(400, "refresh Token does not provided");
@@ -300,6 +300,7 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
     throw new ApiError(404, "user not found in process of refresshAccessToken");
   }
   const accessToken = user.generateAccessToken();
+  refreshToken = user.generateRefreshToken();
 
   const cookieOption = {
     httpOnly: true,
@@ -308,6 +309,7 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
   };
 
   res.cookie("accessToken", accessToken, cookieOption);
+  res.cookie("refreshToken", refreshToken, cookieOption);
   res
     .status(200)
     .json(new ApiResponse(200, accessToken, "accessToken is refreshed"));

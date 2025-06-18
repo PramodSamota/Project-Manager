@@ -80,7 +80,7 @@ const createNote = asyncHandler(async (req, res) => {
   if (!note) {
     throw new ApiError(400, "note not created");
   }
-
+  await note.save();
   res
     .status(201)
     .json(new ApiResponse(201, note, "note is created Successfully"));
@@ -111,7 +111,7 @@ const updateNote = asyncHandler(async (req, res) => {
   if (!updateNote) {
     throw new ApiError(400, "note is not update");
   }
-
+  await updatedNote.save();
   res
     .status(200)
     .json(new ApiResponse(200, updatedNote, "Note is update successfully"));
