@@ -20,6 +20,7 @@ import {
 import { ApiError } from "../utils/api-error.js";
 import { ApiResponse } from "../utils/api-response.js";
 import { handleZodError } from "../utils/handleZodError.js";
+import { uploadOnCloudinary } from "../utils/cloudinary.js";
 
 const registerUser = asyncHandler(async (req, res) => {
   const { email, username, password } = handleZodError(
@@ -50,6 +51,19 @@ const registerUser = asyncHandler(async (req, res) => {
 
   // avater fix;
   //upload on the cloudaniry
+  const avatarLocalPath = req.file?.path;
+  let avatarURL;
+  if (avatarLocalPath) {
+    avatarURL = await uploadOnCloudinary(avatarLocalPath);
+  }
+
+  if (avatarURL && avatarLocalPath) {
+    user.avatar = {
+      url: avatarURL?.secure_url,
+      localPath: avatarLocalPath,
+    };
+  }
+
   await user.save();
 
   const verificationUrl = `${env.BASE_URI}/api/v1/user/verify/email/${unHashedToken}`;

@@ -1,12 +1,13 @@
 import app from "./app.js";
 import dotenv from "dotenv";
 import connectDB from "./db/index.js";
+import { env } from "./validators/env.js";
 
 dotenv.config({
   path: "./.env",
 });
 
-const PORT = process.env.PORT ?? 8000;
+const PORT = env.PORT ?? 8000;
 
 connectDB()
   .then(() => {
@@ -14,5 +15,4 @@ connectDB()
   })
   .catch((err) => {
     console.error("Mongodb connection error", err);
-    process.exit(1);
   });
