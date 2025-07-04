@@ -27,13 +27,11 @@ Key features include:
 - **Validation**: express-validator, Zod
 - **Logging**: Winston
 - **Utilities**: cors, cookie-parser, dotenv
-- **Api_docs**:swagger
+- **Api_docs**: swagger
 
 ### Development Tools
 - Prettier
 - ESLint
-- Husky
-- ts-node-dev
 
 ## Installation
 
@@ -46,7 +44,7 @@ Key features include:
 ### Setup Steps
 1. Clone the repository:
    ```bash
-   [git clone https://github.com/srvjha/project-managment-system](https://github.com/PramodSamota/Project-Management.git)
+   git clone https://github.com/srvjha/project-managment-system
    cd project-management
    ```
 
@@ -69,28 +67,67 @@ Key features include:
    ```
 
 ## Project Structure
-
 ```
-/project-nest
-│── logs/                  # Application logs
-│── public/                # Static files
-│   └── uploads/           # Temporary file storage
-│── src/
-│   ├── controllers/       # Business logic
-│   ├── middleware/        # Express middleware
-│   ├── models/            # Database models
-│   ├── routes/            # API endpoints
-│   ├── utils/             # Helper functions
-│   ├── validators/        # Validation schemas
-│   ├── config/            # Configuration files
-│   ├── types.d.ts         # Type declarations
-│   ├── app.ts             # Express application setup
-│   ├── index.ts           # Server entry point
-├── .env.example           # Environment template
-├── .gitignore            # Git exclusion rules
-├── package.json          # Project metadata
-├── tsconfig.json         # TypeScript config
-└── README.md             # Project documentation
+Task-Management
+├─ .prettierignore
+├─ .prettierrc
+├─ eslint.config.js
+├─ package-lock.json
+├─ package.json
+├─ public
+│  └─ images
+│     ├─ avatar-1750819775801-585381060
+│     └─ avatar-1750820034947-309602551
+├─ Readme.md
+└─ src
+   ├─ .DS_Store
+   ├─ app.js
+   ├─ controllers
+   │  ├─ auth.controllers.js
+   │  ├─ healthcheck.controllers.js
+   │  ├─ note.controllers.js
+   │  ├─ project.controllers.js
+   │  └─ task.controllers.js
+   ├─ db
+   │  └─ index.js
+   ├─ index.js
+   ├─ middlewares
+   │  ├─ auth.middleware.js
+   │  ├─ multer.middleware.js
+   │  ├─ permission.js
+   │  └─ rateLimiter.middlewae.js
+   ├─ models
+   │  ├─ note.models.js
+   │  ├─ project.models.js
+   │  ├─ projectmember.models.js
+   │  ├─ subtask.models.js
+   │  ├─ task.models.js
+   │  └─ user.models.js
+   ├─ routes
+   │  ├─ auth.routes.js
+   │  ├─ healthcheck.routes.js
+   │  ├─ note.routes.js
+   │  ├─ project.routes.js
+   │  └─ task.routes.js
+   ├─ swagger-gen.js
+   ├─ swagger-output.json
+   ├─ utils
+   │  ├─ api-error.js
+   │  ├─ api-response.js
+   │  ├─ async-handler.js
+   │  ├─ cloudinary.js
+   │  ├─ constants.js
+   │  ├─ handleZodError.js
+   │  ├─ helper.js
+   │  ├─ logger.js
+   │  └─ mail.js
+   └─ validators
+      ├─ auth.js
+      ├─ env.js
+      ├─ note.validator.js
+      ├─ project.validator.js
+      └─ task.validator.js
+
 ```
 
 ## Features
@@ -110,7 +147,7 @@ Key features include:
 - 🛡️ Error handling middleware
 
 ## API Documentation
-For detailed API documentation, please refer to the [API Docs](docs/api.md) once the server is running.
+For detailed API documentation, clone the project and run on localhost and go this url ```http://localhost:5000/api-docs```
 
 ## Development
 
