@@ -2,8 +2,9 @@ import swaggerAutogen from "swagger-autogen";
 
 const doc = {
   info: {
-    title: "LeetLab Api",
-    description: "Comprehensive API documentation for the LeetLab platform.",
+    title: "Project-Management Api",
+    description:
+      "Comprehensive API documentation for the Project-Management-system.",
   },
   host: "localhost:5000",
 };
